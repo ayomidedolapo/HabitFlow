@@ -1,3 +1,5 @@
+export const dynamic = "force-dynamic";
+
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import admin from "@/lib/firebase-admin";
@@ -5,7 +7,7 @@ import admin from "@/lib/firebase-admin";
 export async function GET() {
   try {
     const now = new Date();
-    const currentTime = now.toTimeString().slice(0, 5); // "HH:mm"
+    const currentTime = now.toTimeString().slice(0, 5);
 
     const reminders = await prisma.reminder.findMany({
       where: {
@@ -26,14 +28,13 @@ export async function GET() {
 
       if (!token) continue;
 
-      // 🔥 THIS is STEP 8 (you were asking about)
-await admin.messaging().send({
-  token,
-  data: {
-    title: "🔥 Habit Reminder",
-    body: `💪 ${reminder.habit.title}`,
-  },
-});
+      await admin.messaging().send({
+        token,
+        data: {
+          title: "🔥 Habit Reminder",
+          body: `💪 ${reminder.habit.title}`,
+        },
+      });
 
       console.log("🔔 Sent:", reminder.habit.title);
     }
