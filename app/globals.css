@@ -1,26 +1,86 @@
-@import "tailwindcss";
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
 
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html, body {
+  height: 100%;
+}
+
+a {
+  text-decoration: none;
+  color: inherit;
+}
+
+button {
+  cursor: pointer;
+}
+
+/* ── Shared CSS variables used across ALL pages ── */
+/* These are set dynamically by the dashboard layout via inline styles */
+/* Default dark mode values as fallback */
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --ct: #f0f0f4;
+  --cm: rgba(240,240,244,0.38);
+  --cs: rgba(240,240,244,0.62);
+  --cb: rgba(255,255,255,0.07);
+  --cc: rgba(255,255,255,0.03);
+  --ib: rgba(255,255,255,0.04);
+  --iborder: rgba(255,255,255,0.07);
+  --bg: #0c0c0f;
+  --accent: #6366f1;
+  --accent-soft: rgba(99,102,241,0.12);
+  --accent-glow: rgba(99,102,241,0.3);
+
+  /* legacy aliases so old page styles still work */
+  --text: var(--ct);
+  --text-muted: var(--cm);
+  --text-sub: var(--cs);
+  --card: var(--cc);
+  --card-border: var(--cb);
+  --badge-bg: rgba(99,102,241,0.09);
+  --badge-text: #6366f1;
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+/* Light mode overrides — toggled by .light class on .shell */
+.light {
+  --ct: #0f0f14;
+  --cm: rgba(15,15,20,0.42);
+  --cs: rgba(15,15,20,0.65);
+  --cb: rgba(0,0,0,0.07);
+  --cc: #ffffff;
+  --ib: rgba(0,0,0,0.03);
+  --iborder: rgba(0,0,0,0.08);
+  --bg: #f7f7f9;
+  --accent: #6366f1;
+  --accent-soft: rgba(99,102,241,0.08);
+  --accent-glow: rgba(99,102,241,0.2);
+
+  --text: var(--ct);
+  --text-muted: var(--cm);
+  --text-sub: var(--cs);
+  --card: var(--cc);
+  --card-border: var(--cb);
+  --badge-bg: rgba(99,102,241,0.08);
+  --badge-text: #4f46e5;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+/* ── Scrollbar ── */
+::-webkit-scrollbar { width: 5px; height: 5px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--cb); border-radius: 99px; }
+::-webkit-scrollbar-thumb:hover { background: var(--accent-soft); }
+
+select {
+  color-scheme: dark;
 }
 
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+select option {
+  background: #111116;
+  color: #f0f0f4;
 }
