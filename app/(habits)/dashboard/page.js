@@ -665,7 +665,7 @@ navigator.serviceWorker?.ready.then((registration) => {
 
         <div className="section-header">
           <div>
-            <div className="section-title">Today&aspo;s Habits</div>
+            <div className="section-title">Today&apos;s Habits</div>
             <div className="section-sub">
               {totalHabits === 0
                 ? "No habits yet"

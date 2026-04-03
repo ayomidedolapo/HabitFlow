@@ -1,14 +1,18 @@
-export const dynamic = "force-dynamic";
-
 import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 import { prisma } from "@/lib/prisma";
 
-export async function PUT(request, { params }) {
+export async function PUT(request, context) {
   try {
     const session = await getServerSession(authOptions);
-    const { id } = params; // ✅ FIXED
+
+   const params = await context.params;
+const id = params?.id;      
+
+    if (!id) {
+      return NextResponse.json({ error: "Invalid habit ID" }, { status: 400 });
+    }
 
     if (!session?.user?.email) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -109,6 +113,7 @@ export async function PUT(request, { params }) {
     });
 
     return NextResponse.json({ habit: finalHabit || updatedHabit });
+
   } catch (error) {
     console.error("Error updating habit:", error);
     return NextResponse.json(
