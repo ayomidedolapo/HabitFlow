@@ -1,57 +1,48 @@
-// app/stats/page.js or pages/stats.js
+// app/stats/page.js
 "use client"
 
 import { useState, useEffect } from "react"
 import Link from "next/link"
 
 export default function StatsPage() {
-  const [timeRange, setTimeRange] = useState("week")
+  const [timeRange, setTimeRange] = useState("30")
   const [mounted, setMounted] = useState(false)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(null)
+  const [data, setData] = useState(null)
 
   useEffect(() => {
     setMounted(true)
-  }, [])
+    fetchStats()
+  }, [timeRange])
 
-  // Mock data - replace with your API calls
-  const habitData = {
-    totalHabits: 8,
-    activeStreaks: 3,
-    longestStreak: 24,
-    completionRate: 78,
-    weeklyData: [65, 80, 75, 90, 85, 70, 88],
-    monthlyData: [72, 68, 75, 80, 85, 78, 82, 88, 75, 80, 85, 90],
-    categoryBreakdown: [
-      { name: "Health", count: 3, color: "#22c55e", percentage: 40 },
-      { name: "Productivity", count: 2, color: "#6366f1", percentage: 30 },
-      { name: "Mindfulness", count: 2, color: "#f59e0b", percentage: 20 },
-      { name: "Learning", count: 1, color: "#ec4899", percentage: 10 }
-    ],
-    heatmapData: generateHeatmapData(),
-    topStreaks: [
-      { name: "Morning Meditation", streak: 24, icon: "🧘" },
-      { name: "Read 30 mins", streak: 18, icon: "📚" },
-      { name: "Drink Water", streak: 15, icon: "💧" }
-    ],
-    recentMilestones: [
-      { habit: "Exercise", milestone: "7 day streak", date: "2 days ago", icon: "🏃" },
-      { habit: "Journal", milestone: "30 entries", date: "5 days ago", icon: "📝" }
-    ]
+  const fetchStats = async () => {
+    setLoading(true)
+    setError(null)
+    
+    try {
+      const res = await fetch(`/api/stats?range=${timeRange}`)
+      if (!res.ok) throw new Error("Failed to fetch stats")
+      const json = await res.json()
+      setData(json)
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setLoading(false)
+    }
   }
 
-  function generateHeatmapData() {
-    const days = []
-    const today = new Date()
-    for (let i = 364; i >= 0; i--) {
-      const date = new Date(today)
-      date.setDate(date.getDate() - i)
-      const intensity = Math.random() > 0.3 ? Math.floor(Math.random() * 4) : 0
-      days.push({
-        date: date.toISOString().split('T')[0],
-        intensity,
-        day: date.getDay()
-      })
-    }
-    return days
+  // Generate heatmap from daily data
+  const generateHeatmapData = (dailyData) => {
+    if (!dailyData) return []
+    
+    return dailyData.map(day => ({
+      date: day.date,
+      intensity: day.rate === 0 ? 0 : 
+                 day.rate < 25 ? 1 : 
+                 day.rate < 50 ? 2 : 
+                 day.rate < 75 ? 3 : 4
+    }))
   }
 
   const getIntensityColor = (intensity) => {
@@ -65,12 +56,49 @@ export default function StatsPage() {
     return colors[intensity] || colors[0]
   }
 
-  const chartData = timeRange === "week" ? habitData.weeklyData : habitData.monthlyData
-  const chartLabels = timeRange === "week" 
-    ? ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
-    : ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+  const getChangeIndicator = (value) => {
+    if (value > 0) return { icon: "↑", class: "positive", text: `+${value}%` }
+    if (value < 0) return { icon: "↓", class: "negative", text: `${value}%` }
+    return { icon: "→", class: "neutral", text: "0%" }
+  }
 
-  const maxValue = Math.max(...chartData)
+  const heatmapData = data ? generateHeatmapData(data.dailyData) : []
+  const chartData = data?.dailyData || []
+  const maxValue = chartData.length > 0 ? Math.max(...chartData.map(d => d.rate)) : 100
+
+  // Format date for chart labels
+  const formatLabel = (dateStr) => {
+    const date = new Date(dateStr)
+    if (timeRange === "7") return date.toLocaleDateString('en-US', { weekday: 'short' })
+    if (timeRange === "30") return date.getDate()
+    return date.toLocaleDateString('en-US', { month: 'short' })
+  }
+
+  if (loading && !data) {
+    return (
+      <div className="stats-page">
+        <div className="loading-state">
+          <div className="spinner" />
+          <p>Loading your analytics...</p>
+        </div>
+      </div>
+    )
+  }
+
+  if (error) {
+    return (
+      <div className="stats-page">
+        <div className="error-state">
+          <span>⚠️</span>
+          <p>{error}</p>
+          <button onClick={fetchStats} className="retry-btn">Try again</button>
+        </div>
+      </div>
+    )
+  }
+
+  const overview = data?.overview || {}
+  const change = getChangeIndicator(overview.weeklyGrowth || 0)
 
   return (
     <div className="stats-page">
@@ -88,6 +116,41 @@ export default function StatsPage() {
         .stats-container {
           max-width: 1200px;
           margin: 0 auto;
+        }
+
+        /* Loading & Error States */
+        .loading-state, .error-state {
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          justify-content: center;
+          min-height: 60vh;
+          gap: 16px;
+          color: var(--muted);
+        }
+
+        .spinner {
+          width: 40px;
+          height: 40px;
+          border: 3px solid var(--border);
+          border-top-color: var(--accent);
+          border-radius: 50%;
+          animation: spin 0.8s linear infinite;
+        }
+
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        .error-state span { font-size: 48px; }
+        .error-state p { color: var(--text); font-size: 16px; }
+
+        .retry-btn {
+          padding: 12px 24px;
+          background: var(--accent);
+          color: white;
+          border: none;
+          border-radius: 8px;
+          font-weight: 600;
+          cursor: pointer;
         }
 
         /* Header */
@@ -177,9 +240,7 @@ export default function StatsPage() {
           transition: opacity 0.3s;
         }
 
-        .stat-card:hover::before {
-          opacity: 1;
-        }
+        .stat-card:hover::before { opacity: 1; }
 
         .stat-icon {
           width: 44px;
@@ -225,6 +286,7 @@ export default function StatsPage() {
 
         .stat-change.positive { color: #22c55e; }
         .stat-change.negative { color: #ef4444; }
+        .stat-change.neutral { color: var(--muted); }
 
         /* Main Grid */
         .main-grid {
@@ -270,7 +332,7 @@ export default function StatsPage() {
           display: flex;
           align-items: flex-end;
           justify-content: space-between;
-          gap: 12px;
+          gap: 8px;
           height: 200px;
           padding-bottom: 32px;
           position: relative;
@@ -282,6 +344,7 @@ export default function StatsPage() {
           flex-direction: column;
           align-items: center;
           gap: 8px;
+          min-width: 0;
         }
 
         .bar {
@@ -294,6 +357,7 @@ export default function StatsPage() {
           opacity: ${mounted ? 1 : 0};
           transform: scaleY(${mounted ? 1 : 0});
           transform-origin: bottom;
+          min-height: 4px;
         }
 
         .bar:hover {
@@ -302,25 +366,38 @@ export default function StatsPage() {
         }
 
         .bar-label {
-          font-size: 12px;
+          font-size: 11px;
           font-weight: 600;
           color: var(--muted);
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          max-width: 100%;
         }
 
         .bar-value {
           position: absolute;
-          top: -24px;
+          top: -20px;
           left: 50%;
           transform: translateX(-50%);
-          font-size: 11px;
+          font-size: 10px;
           font-weight: 700;
           color: var(--text);
           opacity: 0;
           transition: opacity 0.2s;
+          white-space: nowrap;
         }
 
-        .bar:hover .bar-value {
-          opacity: 1;
+        .bar:hover .bar-value { opacity: 1; }
+
+        /* Empty State */
+        .empty-chart {
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          height: 200px;
+          color: var(--muted);
+          font-size: 14px;
         }
 
         /* Heatmap */
@@ -334,14 +411,10 @@ export default function StatsPage() {
 
         .heatmap {
           display: grid;
-          grid-template-columns: repeat(53, 1fr);
+          grid-template-columns: repeat(auto-fill, minmax(12px, 1fr));
           gap: 3px;
-          overflow-x: auto;
-          padding-bottom: 8px;
-        }
-
-        @media (max-width: 768px) {
-          .heatmap { grid-template-columns: repeat(26, 1fr); }
+          max-height: 120px;
+          overflow: hidden;
         }
 
         .heatmap-cell {
@@ -352,7 +425,7 @@ export default function StatsPage() {
         }
 
         .heatmap-cell:hover {
-          transform: scale(1.2);
+          transform: scale(1.3);
           box-shadow: 0 0 0 2px var(--accent);
           z-index: 10;
         }
@@ -421,12 +494,13 @@ export default function StatsPage() {
           align-items: center;
           justify-content: center;
           font-size: 20px;
-          background: rgba(245, 158, 11, 0.1);
-          border: 1px solid rgba(245, 158, 11, 0.2);
+          background: ${props => props.color}15;
+          border: 1px solid ${props => props.color}30;
         }
 
         .streak-info {
           flex: 1;
+          min-width: 0;
         }
 
         .streak-name {
@@ -434,6 +508,9 @@ export default function StatsPage() {
           font-weight: 600;
           color: var(--text);
           margin-bottom: 2px;
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
         }
 
         .streak-count {
@@ -448,6 +525,7 @@ export default function StatsPage() {
           font-size: 12px;
           font-weight: 700;
           border-radius: 20px;
+          flex-shrink: 0;
         }
 
         /* Category Breakdown */
@@ -496,45 +574,12 @@ export default function StatsPage() {
           transition: width 0.6s ease;
         }
 
-        /* Milestones */
-        .milestone-list {
-          display: flex;
-          flex-direction: column;
-          gap: 12px;
-        }
-
-        .milestone-item {
-          display: flex;
-          align-items: center;
-          gap: 12px;
-          padding: 16px;
-          background: linear-gradient(135deg, rgba(99, 102, 241, 0.05), rgba(139, 92, 246, 0.05));
-          border: 1px solid rgba(99, 102, 241, 0.15);
-          border-radius: 12px;
-        }
-
-        .milestone-icon {
-          width: 44px;
-          height: 44px;
-          border-radius: 12px;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          font-size: 22px;
-          background: white;
-          border: 1px solid var(--border);
-        }
-
-        .milestone-content h4 {
-          font-size: 14px;
-          font-weight: 700;
-          color: var(--text);
-          margin-bottom: 2px;
-        }
-
-        .milestone-content p {
-          font-size: 12px;
+        /* Empty State */
+        .empty-state {
+          text-align: center;
+          padding: 32px;
           color: var(--muted);
+          font-size: 14px;
         }
 
         /* Bottom Grid */
@@ -613,10 +658,10 @@ export default function StatsPage() {
           animation: slideIn 0.5s ease forwards;
         }
 
-        .stat-card:nth-child(1) { animation-delay: 0.1s; }
-        .stat-card:nth-child(2) { animation-delay: 0.15s; }
-        .stat-card:nth-child(3) { animation-delay: 0.2s; }
-        .stat-card:nth-child(4) { animation-delay: 0.25s; }
+        .stat-card:nth-child(1) { animation-delay: 0.05s; }
+        .stat-card:nth-child(2) { animation-delay: 0.1s; }
+        .stat-card:nth-child(3) { animation-delay: 0.15s; }
+        .stat-card:nth-child(4) { animation-delay: 0.2s; }
       `}</style>
 
       <div className="stats-container">
@@ -625,17 +670,21 @@ export default function StatsPage() {
           <div>
             <h1 className="stats-title">Analytics</h1>
             <p style={{ color: 'var(--muted)', fontSize: '14px', marginTop: '4px' }}>
-              Track your progress and build better habits
+              {overview.totalCompletions ? `${overview.totalCompletions} completions in the last ${timeRange} days` : 'Track your progress and build better habits'}
             </p>
           </div>
           <div className="time-selector">
-            {['week', 'month', 'year'].map((range) => (
+            {[
+              { value: "7", label: "Week" },
+              { value: "30", label: "Month" },
+              { value: "90", label: "Quarter" }
+            ].map((range) => (
               <button
-                key={range}
-                className={`time-btn ${timeRange === range ? 'active' : ''}`}
-                onClick={() => setTimeRange(range)}
+                key={range.value}
+                className={`time-btn ${timeRange === range.value ? 'active' : ''}`}
+                onClick={() => setTimeRange(range.value)}
               >
-                {range.charAt(0).toUpperCase() + range.slice(1)}
+                {range.label}
               </button>
             ))}
           </div>
@@ -646,73 +695,78 @@ export default function StatsPage() {
           <div className="stat-card">
             <div className="stat-icon">📊</div>
             <div className="stat-label">Completion Rate</div>
-            <div className="stat-value">{habitData.completionRate}%</div>
-            <div className="stat-change positive">
-              ↑ 12% from last {timeRange}
+            <div className="stat-value">{overview.overallCompletionRate || 0}%</div>
+            <div className={`stat-change ${change.class}`}>
+              {change.icon} {change.text} from last period
             </div>
           </div>
+          
           <div className="stat-card">
             <div className="stat-icon">🔥</div>
-            <div className="stat-label">Active Streaks</div>
-            <div className="stat-value">{habitData.activeStreaks}</div>
+            <div className="stat-label">Active Habits</div>
+            <div className="stat-value">{overview.activeHabits || 0}</div>
             <div className="stat-change positive">
-              ↑ 2 new this week
+              of {overview.totalHabits || 0} total
             </div>
           </div>
+          
           <div className="stat-card">
             <div className="stat-icon">🏆</div>
-            <div className="stat-label">Longest Streak</div>
-            <div className="stat-value">{habitData.longestStreak}</div>
+            <div className="stat-label">Best Streak</div>
+            <div className="stat-value">{overview.bestStreak || 0}</div>
             <div className="stat-change positive">
-              Personal best!
+              Current: {overview.currentStreak || 0} days
             </div>
           </div>
+          
           <div className="stat-card">
             <div className="stat-icon">✓</div>
             <div className="stat-label">Total Completions</div>
-            <div className="stat-value">342</div>
+            <div className="stat-value">{overview.totalCompletions || 0}</div>
             <div className="stat-change positive">
-              ↑ 28 this week
+              Keep it up!
             </div>
           </div>
         </div>
 
         {/* Heatmap */}
-        <div className="heatmap-card">
-          <div className="card-header">
-            <div>
-              <div className="card-title">Activity Heatmap</div>
-              <div className="card-subtitle">365 days of habit building</div>
+        {heatmapData.length > 0 && (
+          <div className="heatmap-card">
+            <div className="card-header">
+              <div>
+                <div className="card-title">Activity Heatmap</div>
+                <div className="card-subtitle">Last {timeRange} days of habit building</div>
+              </div>
             </div>
-          </div>
-          <div className="heatmap">
-            {habitData.heatmapData.map((day, i) => (
-              <div
-                key={i}
-                className="heatmap-cell"
-                style={{
-                  backgroundColor: getIntensityColor(day.intensity),
-                  opacity: mounted ? 1 : 0,
-                  transition: `opacity 0.3s ease ${i * 0.001}s`
-                }}
-                title={`${day.date}: ${day.intensity} activities`}
-              />
-            ))}
-          </div>
-          <div className="heatmap-legend">
-            <span>Less</span>
-            <div className="legend-cells">
-              {[0, 1, 2, 3, 4].map((i) => (
+            <div className="heatmap">
+              {heatmapData.map((day, i) => (
                 <div
                   key={i}
-                  className="legend-cell"
-                  style={{ backgroundColor: getIntensityColor(i) }}
+                  className="heatmap-cell"
+                  style={{
+                    backgroundColor: getIntensityColor(day.intensity),
+                    opacity: mounted ? 1 : 0,
+                    transition: `opacity 0.3s ease ${i * 0.002}s`
+                  }}
+                  title={`${day.date}: ${day.intensity > 0 ? (day.intensity * 25) + '%' : 'No'} completion`}
                 />
               ))}
             </div>
-            <span>More</span>
+            <div className="heatmap-legend">
+              <span>Less</span>
+              <div className="legend-cells">
+                {[0, 1, 2, 3, 4].map((i) => (
+                  <div
+                    key={i}
+                    className="legend-cell"
+                    style={{ backgroundColor: getIntensityColor(i) }}
+                  />
+                ))}
+              </div>
+              <span>More</span>
+            </div>
           </div>
-        </div>
+        )}
 
         {/* Main Grid */}
         <div className="main-grid">
@@ -724,22 +778,26 @@ export default function StatsPage() {
                 <div className="card-subtitle">Daily habit completion rate</div>
               </div>
             </div>
-            <div className="bar-chart">
-              {chartData.map((value, i) => (
-                <div key={i} className="bar-wrapper">
-                  <div
-                    className="bar"
-                    style={{
-                      height: `${(value / maxValue) * 100}%`,
-                      transitionDelay: `${i * 0.05}s`
-                    }}
-                  >
-                    <div className="bar-value">{value}%</div>
+            {chartData.length > 0 ? (
+              <div className="bar-chart">
+                {chartData.map((day, i) => (
+                  <div key={i} className="bar-wrapper">
+                    <div
+                      className="bar"
+                      style={{
+                        height: `${maxValue > 0 ? (day.rate / maxValue) * 100 : 0}%`,
+                        transitionDelay: `${i * 0.02}s`
+                      }}
+                    >
+                      <div className="bar-value">{day.rate}%</div>
+                    </div>
+                    <div className="bar-label">{formatLabel(day.date)}</div>
                   </div>
-                  <div className="bar-label">{chartLabels[i]}</div>
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
+            ) : (
+              <div className="empty-chart">No data available for this period</div>
+            )}
           </div>
 
           {/* Side Cards */}
@@ -749,18 +807,30 @@ export default function StatsPage() {
               <div className="card-header">
                 <div className="card-title">🔥 Top Streaks</div>
               </div>
-              <div className="streak-list">
-                {habitData.topStreaks.map((streak, i) => (
-                  <div key={i} className="streak-item">
-                    <div className="streak-icon">{streak.icon}</div>
-                    <div className="streak-info">
-                      <div className="streak-name">{streak.name}</div>
-                      <div className="streak-count">{streak.streak} days</div>
+              {data?.streakData?.length > 0 ? (
+                <div className="streak-list">
+                  {data.streakData.slice(0, 5).map((streak, i) => (
+                    <div key={i} className="streak-item">
+                      <div 
+                        className="streak-icon" 
+                        style={{ 
+                          background: `${streak.color}15`,
+                          borderColor: `${streak.color}30`
+                        }}
+                      >
+                        🔥
+                      </div>
+                      <div className="streak-info">
+                        <div className="streak-name">{streak.title}</div>
+                        <div className="streak-count">{streak.totalCompletions} total completions</div>
+                      </div>
+                      <div className="streak-badge">{streak.streak}</div>
                     </div>
-                    <div className="streak-badge">{streak.streak}</div>
-                  </div>
-                ))}
-              </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="empty-state">No active streaks yet. Start tracking!</div>
+              )}
             </div>
 
             {/* Categories */}
@@ -768,53 +838,74 @@ export default function StatsPage() {
               <div className="card-header">
                 <div className="card-title">📂 Categories</div>
               </div>
-              <div className="category-list">
-                {habitData.categoryBreakdown.map((cat, i) => (
-                  <div key={i} className="category-item">
-                    <div
-                      className="category-dot"
-                      style={{ backgroundColor: cat.color }}
-                    />
-                    <div className="category-info">
-                      <div className="category-name">
-                        <span>{cat.name}</span>
-                        <span>{cat.count} habits</span>
-                      </div>
-                      <div className="category-bar">
-                        <div
-                          className="category-fill"
-                          style={{
-                            width: `${cat.percentage}%`,
-                            backgroundColor: cat.color
-                          }}
-                        />
+              {data?.categoryStats?.length > 0 ? (
+                <div className="category-list">
+                  {data.categoryStats.map((cat, i) => (
+                    <div key={i} className="category-item">
+                      <div
+                        className="category-dot"
+                        style={{ backgroundColor: cat.color || '#6366f1' }}
+                      />
+                      <div className="category-info">
+                        <div className="category-name">
+                          <span>{cat.name}</span>
+                          <span>{cat.count} habits</span>
+                        </div>
+                        <div className="category-bar">
+                          <div
+                            className="category-fill"
+                            style={{
+                              width: `${Math.max((cat.completions / (overview.totalCompletions || 1)) * 100, 5)}%`,
+                              backgroundColor: cat.color || '#6366f1'
+                            }}
+                          />
+                        </div>
                       </div>
                     </div>
-                  </div>
-                ))}
-              </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="empty-state">No categories yet</div>
+              )}
             </div>
           </div>
         </div>
 
         {/* Bottom Grid */}
         <div className="bottom-grid">
-          {/* Recent Milestones */}
+          {/* Habits List */}
           <div className="side-card">
             <div className="card-header">
-              <div className="card-title">🎉 Recent Milestones</div>
+              <div className="card-title">📋 Your Habits</div>
             </div>
-            <div className="milestone-list">
-              {habitData.recentMilestones.map((milestone, i) => (
-                <div key={i} className="milestone-item">
-                  <div className="milestone-icon">{milestone.icon}</div>
-                  <div className="milestone-content">
-                    <h4>{milestone.habit} — {milestone.milestone}</h4>
-                    <p>{milestone.date}</p>
-                  </div>
-                </div>
-              ))}
-            </div>
+            {data?.habits?.length > 0 ? (
+              <div className="streak-list">
+                {data.habits.map((habit, i) => (
+                  <Link 
+                    href={`/habits/${habit.id}/edit`} 
+                    key={i} 
+                    className="streak-item"
+                    style={{ textDecoration: 'none', color: 'inherit' }}
+                  >
+                    <div 
+                      className="streak-icon"
+                      style={{ 
+                        background: `${habit.color}15`,
+                        borderColor: `${habit.color}30`
+                      }}
+                    >
+                      ✓
+                    </div>
+                    <div className="streak-info">
+                      <div className="streak-name">{habit.title}</div>
+                      <div className="streak-count">{habit.completions} completions</div>
+                    </div>
+                  </Link>
+                ))}
+              </div>
+            ) : (
+              <div className="empty-state">No habits yet. Create your first one!</div>
+            )}
           </div>
 
           {/* AI Insights */}
@@ -823,13 +914,17 @@ export default function StatsPage() {
             <div className="insight-item">
               <span className="insight-icon">🌅</span>
               <p className="insight-text">
-                You&apso;re most productive on Tuesday mornings. Consider scheduling your hardest habits then.
+                {overview.overallCompletionRate > 70 
+                  ? "You're crushing it! Your completion rate is above average." 
+                  : "Start small. Even 1% improvement daily compounds to 37x yearly growth."}
               </p>
             </div>
             <div className="insight-item">
               <span className="insight-icon">⚡</span>
               <p className="insight-text">
-                Your meditation habit has improved sleep quality by 23% based on your check-in patterns.
+                {overview.bestStreak > 7 
+                  ? `Your ${overview.bestStreak}-day streak shows you can build lasting habits!`
+                  : "Consistency is key. Try not to miss twice in a row."}
               </p>
             </div>
           </div>
