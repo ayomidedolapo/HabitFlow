@@ -6,7 +6,9 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "postinstall": "prisma generate"
+
   },
   "dependencies": {
     "@prisma/adapter-neon": "^7.6.0",
@@ -32,4 +34,5 @@
     "eslint-config-next": "16.2.2",
     "tailwindcss": "^4"
   }
+  
 }
