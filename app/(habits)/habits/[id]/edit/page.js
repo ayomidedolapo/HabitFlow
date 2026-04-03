@@ -57,36 +57,43 @@ export default function EditHabitPage() {
 
   // Fetch habit data
   useEffect(() => {
-    const fetchHabit = async () => {
-      try {
-        const res = await fetch(`/api/habits/${id}`)
-        if (!res.ok) throw new Error("Failed to fetch habit")
-        const data = await res.json()
-        
-        const habit = data.habit
-        const reminder = habit.reminders?.[0]
-        
-        setForm({
-          title: habit.title || "",
-          description: habit.description || "",
-          category: habit.category || "General",
-          frequency: habit.frequency || "daily",
-          color: habit.color || "#6366f1",
-          targetDays: habit.targetDays || 21,
-          isArchived: habit.isArchived || false,
-          reminderEnabled: reminder?.isActive || false,
-          reminderTime: reminder?.time || "09:00",
-          reminderMethod: reminder?.method || "push"
-        })
-      } catch (err) {
-        setError(err.message)
-      } finally {
-        setLoading(false)
-      }
+  if (!id) return;
+
+  setLoading(true);
+  setError(null);
+
+  const fetchHabit = async () => {
+    try {
+      const res = await fetch(`/api/habits/${id}`, { cache: "no-store" });
+
+      if (!res.ok) throw new Error("Failed to fetch habit");
+
+      const data = await res.json();
+      const habit = data.habit;
+      const reminder = habit.reminders?.[0];
+
+      setForm({
+        title: habit.title || "",
+        description: habit.description || "",
+        category: habit.category || "General",
+        frequency: habit.frequency || "daily",
+        color: habit.color || "#6366f1",
+        targetDays: habit.targetDays || 21,
+        isArchived: habit.isArchived || false,
+        reminderEnabled: reminder?.isActive || false,
+        reminderTime: reminder?.time || "09:00",
+        reminderMethod: reminder?.method || "push"
+      });
+
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
     }
-    
-    fetchHabit()
-  }, [id])
+  };
+
+  fetchHabit();
+}, [id]);
 
   const handleChange = (field, value) => {
     setForm(prev => ({ ...prev, [field]: value }))
@@ -154,17 +161,17 @@ export default function EditHabitPage() {
 
   if (loading) {
     return (
-      <div className="edit-page">
+      <div className="edit-page" key={id}>
         <div className="loading-state">
           <div className="spinner" />
-          <p>Loading habit...</p>
+          <p></p>
         </div>
       </div>
     )
   }
 
   return (
-    <div className="edit-page">
+    <div className="edit-page" key={id}>
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
 

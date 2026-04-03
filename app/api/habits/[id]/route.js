@@ -5,11 +5,19 @@ import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 import { prisma } from "@/lib/prisma";
 
+// =======================
 // GET single habit
-export async function GET(request, { params }) {
+// =======================
+export async function GET(request, context) {
   try {
     const session = await getServerSession(authOptions);
-   const { id } = params; 
+
+    // ✅ FIX HERE
+    const { id } = await context.params;
+
+    if (!id) {
+      return NextResponse.json({ error: "Invalid habit ID" }, { status: 400 });
+    }
 
     if (!session?.user?.id) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -26,6 +34,7 @@ export async function GET(request, { params }) {
             completedAt: "desc",
           },
         },
+        reminders: true, // 🔥 needed for edit page
         _count: {
           select: {
             logs: true,
@@ -40,7 +49,7 @@ export async function GET(request, { params }) {
 
     return NextResponse.json({ habit });
   } catch (error) {
-    console.error("Error fetching habit:", error);
+    console.error("GET habit error:", error);
     return NextResponse.json(
       { error: "Failed to fetch habit" },
       { status: 500 }
@@ -48,11 +57,14 @@ export async function GET(request, { params }) {
   }
 }
 
-// PATCH habit (archive + unarchive works here)
-export async function PATCH(request, { params }) {
+// =======================
+// PATCH habit
+// =======================
+export async function PATCH(request, context) {
   try {
     const session = await getServerSession(authOptions);
-    const { id } = await params;
+
+    const { id } = await context.params;
 
     if (!session?.user?.id) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -74,14 +86,12 @@ export async function PATCH(request, { params }) {
     const updateData = {};
 
     if (body.title !== undefined) updateData.title = body.title.trim();
-    if (body.description !== undefined) {
+    if (body.description !== undefined)
       updateData.description = body.description?.trim() || null;
-    }
     if (body.category !== undefined) updateData.category = body.category;
     if (body.frequency !== undefined) updateData.frequency = body.frequency;
     if (body.color !== undefined) updateData.color = body.color;
 
-    // ✅ THIS is what archive/unarchive uses
     if (body.isArchived !== undefined) {
       updateData.isArchived = body.isArchived;
     }
@@ -97,7 +107,7 @@ export async function PATCH(request, { params }) {
 
     return NextResponse.json({ habit: updatedHabit });
   } catch (error) {
-    console.error("Error updating habit:", error);
+    console.error("PATCH habit error:", error);
     return NextResponse.json(
       { error: "Failed to update habit" },
       { status: 500 }
@@ -105,11 +115,14 @@ export async function PATCH(request, { params }) {
   }
 }
 
+// =======================
 // DELETE habit
-export async function DELETE(request, { params }) {
+// =======================
+export async function DELETE(request, context) {
   try {
     const session = await getServerSession(authOptions);
-    const { id } = await params;
+
+    const { id } = await context.params;
 
     if (!session?.user?.id) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -126,8 +139,11 @@ export async function DELETE(request, { params }) {
       return NextResponse.json({ error: "Habit not found" }, { status: 404 });
     }
 
-    // delete logs first
     await prisma.habitLog.deleteMany({
+      where: { habitId: id },
+    });
+
+    await prisma.reminder.deleteMany({
       where: { habitId: id },
     });
 
@@ -137,7 +153,7 @@ export async function DELETE(request, { params }) {
 
     return NextResponse.json({ message: "Habit deleted successfully" });
   } catch (error) {
-    console.error("Error deleting habit:", error);
+    console.error("DELETE habit error:", error);
     return NextResponse.json(
       { error: "Failed to delete habit" },
       { status: 500 }

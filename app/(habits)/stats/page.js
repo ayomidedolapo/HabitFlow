@@ -10,6 +10,8 @@ export default function StatsPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [data, setData] = useState(null)
+  const [habitsPage, setHabitsPage] = useState(0)
+  const HABITS_PER_PAGE = 5
 
   useEffect(() => {
     setMounted(true)
@@ -19,7 +21,7 @@ export default function StatsPage() {
   const fetchStats = async () => {
     setLoading(true)
     setError(null)
-    
+    setHabitsPage(0)
     try {
       const res = await fetch(`/api/stats?range=${timeRange}`)
       if (!res.ok) throw new Error("Failed to fetch stats")
@@ -32,15 +34,13 @@ export default function StatsPage() {
     }
   }
 
-  // Generate heatmap from daily data
   const generateHeatmapData = (dailyData) => {
     if (!dailyData) return []
-    
     return dailyData.map(day => ({
       date: day.date,
-      intensity: day.rate === 0 ? 0 : 
-                 day.rate < 25 ? 1 : 
-                 day.rate < 50 ? 2 : 
+      intensity: day.rate === 0 ? 0 :
+                 day.rate < 25 ? 1 :
+                 day.rate < 50 ? 2 :
                  day.rate < 75 ? 3 : 4
     }))
   }
@@ -62,11 +62,22 @@ export default function StatsPage() {
     return { icon: "→", class: "neutral", text: "0%" }
   }
 
+  // Thin out labels when bars are compressed so they don't overlap
+  const shouldShowLabel = (index, total) => {
+    if (total <= 10) return true
+    if (total <= 20) return index % 2 === 0
+    if (total <= 31) return index % 5 === 0
+    return index % 10 === 0
+  }
+
   const heatmapData = data ? generateHeatmapData(data.dailyData) : []
   const chartData = data?.dailyData || []
   const maxValue = chartData.length > 0 ? Math.max(...chartData.map(d => d.rate)) : 100
 
-  // Format date for chart labels
+  const allHabits = data?.habits || []
+  const totalHabitsPages = Math.ceil(allHabits.length / HABITS_PER_PAGE)
+  const pagedHabits = allHabits.slice(habitsPage * HABITS_PER_PAGE, (habitsPage + 1) * HABITS_PER_PAGE)
+
   const formatLabel = (dateStr) => {
     const date = new Date(dateStr)
     if (timeRange === "7") return date.toLocaleDateString('en-US', { weekday: 'short' })
@@ -105,6 +116,8 @@ export default function StatsPage() {
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
 
+        *, *::before, *::after { box-sizing: border-box; }
+
         .stats-page {
           font-family: 'Inter', sans-serif;
           color: var(--text);
@@ -113,12 +126,10 @@ export default function StatsPage() {
           padding: 24px;
         }
 
-        .stats-container {
-          max-width: 1200px;
-          margin: 0 auto;
-        }
+        @media (max-width: 480px) { .stats-page { padding: 16px; } }
 
-        /* Loading & Error States */
+        .stats-container { max-width: 1200px; margin: 0 auto; }
+
         .loading-state, .error-state {
           display: flex;
           flex-direction: column;
@@ -130,8 +141,7 @@ export default function StatsPage() {
         }
 
         .spinner {
-          width: 40px;
-          height: 40px;
+          width: 40px; height: 40px;
           border: 3px solid var(--border);
           border-top-color: var(--accent);
           border-radius: 50%;
@@ -153,7 +163,6 @@ export default function StatsPage() {
           cursor: pointer;
         }
 
-        /* Header */
         .stats-header {
           display: flex;
           align-items: center;
@@ -191,12 +200,8 @@ export default function StatsPage() {
           transition: all 0.2s;
         }
 
-        .time-btn.active {
-          background: var(--accent);
-          color: white;
-        }
+        .time-btn.active { background: var(--accent); color: white; }
 
-        /* Overview Cards */
         .overview-grid {
           display: grid;
           grid-template-columns: repeat(4, 1fr);
@@ -204,13 +209,8 @@ export default function StatsPage() {
           margin-bottom: 32px;
         }
 
-        @media (max-width: 968px) {
-          .overview-grid { grid-template-columns: repeat(2, 1fr); }
-        }
-
-        @media (max-width: 480px) {
-          .overview-grid { grid-template-columns: 1fr; }
-        }
+        @media (max-width: 968px) { .overview-grid { grid-template-columns: repeat(2, 1fr); } }
+        @media (max-width: 480px) { .overview-grid { grid-template-columns: 1fr; } }
 
         .stat-card {
           background: var(--card);
@@ -231,9 +231,7 @@ export default function StatsPage() {
         .stat-card::before {
           content: '';
           position: absolute;
-          top: 0;
-          left: 0;
-          right: 0;
+          top: 0; left: 0; right: 0;
           height: 3px;
           background: linear-gradient(90deg, var(--accent), #8b5cf6);
           opacity: 0;
@@ -243,8 +241,7 @@ export default function StatsPage() {
         .stat-card:hover::before { opacity: 1; }
 
         .stat-icon {
-          width: 44px;
-          height: 44px;
+          width: 44px; height: 44px;
           border-radius: 12px;
           display: flex;
           align-items: center;
@@ -288,7 +285,7 @@ export default function StatsPage() {
         .stat-change.negative { color: #ef4444; }
         .stat-change.neutral { color: var(--muted); }
 
-        /* Main Grid */
+        /* ── Main 2-col grid ── */
         .main-grid {
           display: grid;
           grid-template-columns: 2fr 1fr;
@@ -296,16 +293,17 @@ export default function StatsPage() {
           margin-bottom: 24px;
         }
 
-        @media (max-width: 968px) {
-          .main-grid { grid-template-columns: 1fr; }
-        }
+        @media (max-width: 968px) { .main-grid { grid-template-columns: 1fr; } }
 
-        /* Chart Card */
+        /* ── Chart card ──
+           min-width: 0 is the critical rule. Without it a flex/grid child
+           refuses to shrink below its content size, blowing out the layout. */
         .chart-card {
           background: var(--card);
           border: 1px solid var(--border);
           border-radius: 16px;
           padding: 24px;
+          min-width: 0;
         }
 
         .card-header {
@@ -315,82 +313,89 @@ export default function StatsPage() {
           margin-bottom: 24px;
         }
 
-        .card-title {
-          font-size: 16px;
-          font-weight: 700;
-          color: var(--text);
-        }
+        .card-title { font-size: 16px; font-weight: 700; color: var(--text); }
+        .card-subtitle { font-size: 13px; color: var(--muted); margin-top: 2px; }
 
-        .card-subtitle {
-          font-size: 13px;
-          color: var(--muted);
-          margin-top: 2px;
-        }
-
-        /* Bar Chart */
+        /*
+         * ── Bar chart — compress, never scroll ──
+         *
+         * The three rules that make this work on any screen width:
+         *   1. width: 100%; overflow: hidden  → never wider than the card
+         *   2. flex: 1 1 0 on .bar-wrapper    → all bars share space equally & can shrink
+         *   3. min-width: 0 on .bar-wrapper   → allows shrinking past content size
+         *
+         * No min-width on .bar-chart itself — that's what caused overflow before.
+         */
         .bar-chart {
           display: flex;
           align-items: flex-end;
           justify-content: space-between;
-          gap: 8px;
+          gap: 2px;
           height: 200px;
-          padding-bottom: 32px;
-          position: relative;
+          padding-bottom: 24px;
+          width: 100%;
+          overflow: hidden;
         }
 
         .bar-wrapper {
-          flex: 1;
+          flex: 1 1 0;
+          min-width: 0;
           display: flex;
           flex-direction: column;
           align-items: center;
-          gap: 8px;
-          min-width: 0;
+          justify-content: flex-end;
+          gap: 4px;
+          height: 100%;
         }
 
         .bar {
           width: 100%;
           max-width: 40px;
           background: linear-gradient(180deg, var(--accent), #8b5cf6);
-          border-radius: 6px 6px 0 0;
-          transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+          border-radius: 3px 3px 0 0;
+          transition: height 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275),
+                      opacity 0.4s ease,
+                      transform 0.4s ease;
           position: relative;
-          opacity: ${mounted ? 1 : 0};
-          transform: scaleY(${mounted ? 1 : 0});
+          min-height: 3px;
           transform-origin: bottom;
-          min-height: 4px;
         }
 
-        .bar:hover {
-          filter: brightness(1.1);
-          transform: scaleY(1.05);
+        .bar:hover { filter: brightness(1.15); }
+
+        .bar-tooltip {
+          display: none;
+          position: absolute;
+          bottom: calc(100% + 6px);
+          left: 50%;
+          transform: translateX(-50%);
+          background: var(--card);
+          border: 1px solid var(--border);
+          border-radius: 6px;
+          padding: 3px 7px;
+          font-size: 10px;
+          font-weight: 700;
+          color: var(--text);
+          white-space: nowrap;
+          z-index: 20;
+          pointer-events: none;
         }
+
+        .bar:hover .bar-tooltip { display: block; }
 
         .bar-label {
-          font-size: 11px;
+          font-size: 9px;
           font-weight: 600;
           color: var(--muted);
           white-space: nowrap;
           overflow: hidden;
-          text-overflow: ellipsis;
+          text-overflow: clip;
           max-width: 100%;
+          text-align: center;
+          line-height: 1;
+          flex-shrink: 0;
         }
 
-        .bar-value {
-          position: absolute;
-          top: -20px;
-          left: 50%;
-          transform: translateX(-50%);
-          font-size: 10px;
-          font-weight: 700;
-          color: var(--text);
-          opacity: 0;
-          transition: opacity 0.2s;
-          white-space: nowrap;
-        }
-
-        .bar:hover .bar-value { opacity: 1; }
-
-        /* Empty State */
         .empty-chart {
           display: flex;
           align-items: center;
@@ -439,36 +444,21 @@ export default function StatsPage() {
           color: var(--muted);
         }
 
-        .legend-cells {
-          display: flex;
-          gap: 3px;
-        }
+        .legend-cells { display: flex; gap: 3px; }
+        .legend-cell { width: 12px; height: 12px; border-radius: 2px; }
 
-        .legend-cell {
-          width: 12px;
-          height: 12px;
-          border-radius: 2px;
-        }
-
-        /* Side Cards */
-        .side-cards {
-          display: flex;
-          flex-direction: column;
-          gap: 24px;
-        }
+        /* Side cards */
+        .side-cards { display: flex; flex-direction: column; gap: 24px; min-width: 0; }
 
         .side-card {
           background: var(--card);
           border: 1px solid var(--border);
           border-radius: 16px;
           padding: 24px;
+          min-width: 0;
         }
 
-        .streak-list {
-          display: flex;
-          flex-direction: column;
-          gap: 12px;
-        }
+        .streak-list { display: flex; flex-direction: column; gap: 12px; }
 
         .streak-item {
           display: flex;
@@ -479,6 +469,7 @@ export default function StatsPage() {
           border-radius: 12px;
           border: 1px solid var(--border);
           transition: all 0.2s;
+          min-width: 0;
         }
 
         .streak-item:hover {
@@ -487,21 +478,16 @@ export default function StatsPage() {
         }
 
         .streak-icon {
-          width: 40px;
-          height: 40px;
+          width: 40px; height: 40px;
+          flex-shrink: 0;
           border-radius: 10px;
           display: flex;
           align-items: center;
           justify-content: center;
           font-size: 20px;
-          background: ${props => props.color}15;
-          border: 1px solid ${props => props.color}30;
         }
 
-        .streak-info {
-          flex: 1;
-          min-width: 0;
-        }
+        .streak-info { flex: 1; min-width: 0; }
 
         .streak-name {
           font-size: 14px;
@@ -513,10 +499,7 @@ export default function StatsPage() {
           text-overflow: ellipsis;
         }
 
-        .streak-count {
-          font-size: 12px;
-          color: var(--muted);
-        }
+        .streak-count { font-size: 12px; color: var(--muted); }
 
         .streak-badge {
           padding: 6px 12px;
@@ -528,29 +511,10 @@ export default function StatsPage() {
           flex-shrink: 0;
         }
 
-        /* Category Breakdown */
-        .category-list {
-          display: flex;
-          flex-direction: column;
-          gap: 16px;
-        }
-
-        .category-item {
-          display: flex;
-          align-items: center;
-          gap: 12px;
-        }
-
-        .category-dot {
-          width: 12px;
-          height: 12px;
-          border-radius: 50%;
-          flex-shrink: 0;
-        }
-
-        .category-info {
-          flex: 1;
-        }
+        .category-list { display: flex; flex-direction: column; gap: 16px; }
+        .category-item { display: flex; align-items: center; gap: 12px; }
+        .category-dot { width: 12px; height: 12px; border-radius: 50%; flex-shrink: 0; }
+        .category-info { flex: 1; min-width: 0; }
 
         .category-name {
           font-size: 14px;
@@ -559,14 +523,10 @@ export default function StatsPage() {
           margin-bottom: 4px;
           display: flex;
           justify-content: space-between;
+          gap: 8px;
         }
 
-        .category-bar {
-          height: 6px;
-          background: var(--surface);
-          border-radius: 3px;
-          overflow: hidden;
-        }
+        .category-bar { height: 6px; background: var(--surface); border-radius: 3px; overflow: hidden; }
 
         .category-fill {
           height: 100%;
@@ -574,26 +534,50 @@ export default function StatsPage() {
           transition: width 0.6s ease;
         }
 
-        /* Empty State */
-        .empty-state {
-          text-align: center;
-          padding: 32px;
-          color: var(--muted);
-          font-size: 14px;
+        .empty-state { text-align: center; padding: 32px; color: var(--muted); font-size: 14px; }
+
+        /* Bottom grid */
+        .bottom-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
+
+        @media (max-width: 768px) { .bottom-grid { grid-template-columns: 1fr; } }
+
+        /* Habits pagination */
+        .habits-card-footer {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          margin-top: 16px;
+          padding-top: 14px;
+          border-top: 1px solid var(--border);
         }
 
-        /* Bottom Grid */
-        .bottom-grid {
-          display: grid;
-          grid-template-columns: 1fr 1fr;
-          gap: 24px;
+        .pagination-info { font-size: 12px; color: var(--muted); font-weight: 500; }
+        .pagination-arrows { display: flex; gap: 6px; }
+
+        .arrow-btn {
+          width: 32px; height: 32px;
+          border-radius: 8px;
+          border: 1px solid var(--border);
+          background: var(--surface);
+          color: var(--text);
+          font-size: 16px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          cursor: pointer;
+          transition: all 0.15s;
+          line-height: 1;
         }
 
-        @media (max-width: 768px) {
-          .bottom-grid { grid-template-columns: 1fr; }
+        .arrow-btn:hover:not(:disabled) {
+          background: var(--accent);
+          color: white;
+          border-color: var(--accent);
         }
 
-        /* Insights Card */
+        .arrow-btn:disabled { opacity: 0.35; cursor: not-allowed; }
+
+        /* Insights */
         .insights-card {
           background: linear-gradient(135deg, var(--accent), #8b5cf6);
           border-radius: 16px;
@@ -606,20 +590,13 @@ export default function StatsPage() {
         .insights-card::before {
           content: '';
           position: absolute;
-          top: -50%;
-          right: -20%;
-          width: 300px;
-          height: 300px;
+          top: -50%; right: -20%;
+          width: 300px; height: 300px;
           background: rgba(255, 255, 255, 0.1);
           border-radius: 50%;
         }
 
-        .insights-title {
-          font-size: 18px;
-          font-weight: 700;
-          margin-bottom: 16px;
-          position: relative;
-        }
+        .insights-title { font-size: 18px; font-weight: 700; margin-bottom: 16px; position: relative; }
 
         .insight-item {
           display: flex;
@@ -632,26 +609,12 @@ export default function StatsPage() {
           backdrop-filter: blur(10px);
         }
 
-        .insight-icon {
-          font-size: 20px;
-        }
+        .insight-icon { font-size: 20px; }
+        .insight-text { font-size: 14px; line-height: 1.5; opacity: 0.95; }
 
-        .insight-text {
-          font-size: 14px;
-          line-height: 1.5;
-          opacity: 0.95;
-        }
-
-        /* Animations */
         @keyframes slideIn {
-          from {
-            opacity: 0;
-            transform: translateY(20px);
-          }
-          to {
-            opacity: 1;
-            transform: translateY(0);
-          }
+          from { opacity: 0; transform: translateY(20px); }
+          to   { opacity: 1; transform: translateY(0); }
         }
 
         .stat-card, .chart-card, .side-card, .heatmap-card {
@@ -665,17 +628,18 @@ export default function StatsPage() {
       `}</style>
 
       <div className="stats-container">
-        {/* Header */}
         <div className="stats-header">
           <div>
             <h1 className="stats-title">Analytics</h1>
             <p style={{ color: 'var(--muted)', fontSize: '14px', marginTop: '4px' }}>
-              {overview.totalCompletions ? `${overview.totalCompletions} completions in the last ${timeRange} days` : 'Track your progress and build better habits'}
+              {overview.totalCompletions
+                ? `${overview.totalCompletions} completions in the last ${timeRange} days`
+                : 'Track your progress and build better habits'}
             </p>
           </div>
           <div className="time-selector">
             {[
-              { value: "7", label: "Week" },
+              { value: "7",  label: "Week" },
               { value: "30", label: "Month" },
               { value: "90", label: "Quarter" }
             ].map((range) => (
@@ -690,46 +654,33 @@ export default function StatsPage() {
           </div>
         </div>
 
-        {/* Overview Cards */}
         <div className="overview-grid">
           <div className="stat-card">
             <div className="stat-icon">📊</div>
             <div className="stat-label">Completion Rate</div>
             <div className="stat-value">{overview.overallCompletionRate || 0}%</div>
-            <div className={`stat-change ${change.class}`}>
-              {change.icon} {change.text} from last period
-            </div>
+            <div className={`stat-change ${change.class}`}>{change.icon} {change.text} from last period</div>
           </div>
-          
           <div className="stat-card">
             <div className="stat-icon">🔥</div>
             <div className="stat-label">Active Habits</div>
             <div className="stat-value">{overview.activeHabits || 0}</div>
-            <div className="stat-change positive">
-              of {overview.totalHabits || 0} total
-            </div>
+            <div className="stat-change positive">of {overview.totalHabits || 0} total</div>
           </div>
-          
           <div className="stat-card">
             <div className="stat-icon">🏆</div>
             <div className="stat-label">Best Streak</div>
             <div className="stat-value">{overview.bestStreak || 0}</div>
-            <div className="stat-change positive">
-              Current: {overview.currentStreak || 0} days
-            </div>
+            <div className="stat-change positive">Current: {overview.currentStreak || 0} days</div>
           </div>
-          
           <div className="stat-card">
             <div className="stat-icon">✓</div>
             <div className="stat-label">Total Completions</div>
             <div className="stat-value">{overview.totalCompletions || 0}</div>
-            <div className="stat-change positive">
-              Keep it up!
-            </div>
+            <div className="stat-change positive">Keep it up!</div>
           </div>
         </div>
 
-        {/* Heatmap */}
         {heatmapData.length > 0 && (
           <div className="heatmap-card">
             <div className="card-header">
@@ -756,11 +707,7 @@ export default function StatsPage() {
               <span>Less</span>
               <div className="legend-cells">
                 {[0, 1, 2, 3, 4].map((i) => (
-                  <div
-                    key={i}
-                    className="legend-cell"
-                    style={{ backgroundColor: getIntensityColor(i) }}
-                  />
+                  <div key={i} className="legend-cell" style={{ backgroundColor: getIntensityColor(i) }} />
                 ))}
               </div>
               <span>More</span>
@@ -768,9 +715,7 @@ export default function StatsPage() {
           </div>
         )}
 
-        {/* Main Grid */}
         <div className="main-grid">
-          {/* Chart */}
           <div className="chart-card">
             <div className="card-header">
               <div>
@@ -786,12 +731,17 @@ export default function StatsPage() {
                       className="bar"
                       style={{
                         height: `${maxValue > 0 ? (day.rate / maxValue) * 100 : 0}%`,
-                        transitionDelay: `${i * 0.02}s`
+                        transitionDelay: `${i * 0.02}s`,
+                        opacity: mounted ? 1 : 0,
+                        transform: mounted ? 'scaleY(1)' : 'scaleY(0)',
+                        transformOrigin: 'bottom'
                       }}
                     >
-                      <div className="bar-value">{day.rate}%</div>
+                      <div className="bar-tooltip">{day.rate}%</div>
                     </div>
-                    <div className="bar-label">{formatLabel(day.date)}</div>
+                    <div className="bar-label">
+                      {shouldShowLabel(i, chartData.length) ? formatLabel(day.date) : ''}
+                    </div>
                   </div>
                 ))}
               </div>
@@ -800,9 +750,7 @@ export default function StatsPage() {
             )}
           </div>
 
-          {/* Side Cards */}
           <div className="side-cards">
-            {/* Top Streaks */}
             <div className="side-card">
               <div className="card-header">
                 <div className="card-title">🔥 Top Streaks</div>
@@ -811,15 +759,7 @@ export default function StatsPage() {
                 <div className="streak-list">
                   {data.streakData.slice(0, 5).map((streak, i) => (
                     <div key={i} className="streak-item">
-                      <div 
-                        className="streak-icon" 
-                        style={{ 
-                          background: `${streak.color}15`,
-                          borderColor: `${streak.color}30`
-                        }}
-                      >
-                        🔥
-                      </div>
+                      <div className="streak-icon" style={{ background: `${streak.color}15`, border: `1px solid ${streak.color}30` }}>🔥</div>
                       <div className="streak-info">
                         <div className="streak-name">{streak.title}</div>
                         <div className="streak-count">{streak.totalCompletions} total completions</div>
@@ -833,7 +773,6 @@ export default function StatsPage() {
               )}
             </div>
 
-            {/* Categories */}
             <div className="side-card">
               <div className="card-header">
                 <div className="card-title">📂 Categories</div>
@@ -842,10 +781,7 @@ export default function StatsPage() {
                 <div className="category-list">
                   {data.categoryStats.map((cat, i) => (
                     <div key={i} className="category-item">
-                      <div
-                        className="category-dot"
-                        style={{ backgroundColor: cat.color || '#6366f1' }}
-                      />
+                      <div className="category-dot" style={{ backgroundColor: cat.color || '#6366f1' }} />
                       <div className="category-info">
                         <div className="category-name">
                           <span>{cat.name}</span>
@@ -871,58 +807,72 @@ export default function StatsPage() {
           </div>
         </div>
 
-        {/* Bottom Grid */}
         <div className="bottom-grid">
-          {/* Habits List */}
           <div className="side-card">
             <div className="card-header">
               <div className="card-title">📋 Your Habits</div>
             </div>
-            {data?.habits?.length > 0 ? (
-              <div className="streak-list">
-                {data.habits.map((habit, i) => (
-                  <Link 
-                    href={`/habits/${habit.id}/edit`} 
-                    key={i} 
-                    className="streak-item"
-                    style={{ textDecoration: 'none', color: 'inherit' }}
-                  >
-                    <div 
-                      className="streak-icon"
-                      style={{ 
-                        background: `${habit.color}15`,
-                        borderColor: `${habit.color}30`
-                      }}
+            {allHabits.length > 0 ? (
+              <>
+                <div className="streak-list">
+                  {pagedHabits.map((habit, i) => (
+                    <Link
+                      href={`/habits/${habit.id}/edit`}
+                      key={i}
+                      className="streak-item"
+                      style={{ textDecoration: 'none', color: 'inherit' }}
                     >
-                      ✓
+                      <div className="streak-icon" style={{ background: `${habit.color}15`, border: `1px solid ${habit.color}30` }}>
+                        ✓
+                      </div>
+                      <div className="streak-info">
+                        <div className="streak-name">{habit.title}</div>
+                        <div className="streak-count">{habit.completions} completions</div>
+                      </div>
+                    </Link>
+                  ))}
+                </div>
+                {totalHabitsPages > 1 && (
+                  <div className="habits-card-footer">
+                    <span className="pagination-info">
+                      {habitsPage * HABITS_PER_PAGE + 1}–{Math.min((habitsPage + 1) * HABITS_PER_PAGE, allHabits.length)} of {allHabits.length}
+                    </span>
+                    <div className="pagination-arrows">
+                      <button
+                        className="arrow-btn"
+                        onClick={() => setHabitsPage(p => Math.max(0, p - 1))}
+                        disabled={habitsPage === 0}
+                        aria-label="Previous page"
+                      >←</button>
+                      <button
+                        className="arrow-btn"
+                        onClick={() => setHabitsPage(p => Math.min(totalHabitsPages - 1, p + 1))}
+                        disabled={habitsPage >= totalHabitsPages - 1}
+                        aria-label="Next page"
+                      >→</button>
                     </div>
-                    <div className="streak-info">
-                      <div className="streak-name">{habit.title}</div>
-                      <div className="streak-count">{habit.completions} completions</div>
-                    </div>
-                  </Link>
-                ))}
-              </div>
+                  </div>
+                )}
+              </>
             ) : (
               <div className="empty-state">No habits yet. Create your first one!</div>
             )}
           </div>
 
-          {/* AI Insights */}
           <div className="insights-card">
             <div className="insights-title">💡 Smart Insights</div>
             <div className="insight-item">
               <span className="insight-icon">🌅</span>
               <p className="insight-text">
-                {overview.overallCompletionRate > 70 
-                  ? "You're crushing it! Your completion rate is above average." 
+                {overview.overallCompletionRate > 70
+                  ? "You're crushing it! Your completion rate is above average."
                   : "Start small. Even 1% improvement daily compounds to 37x yearly growth."}
               </p>
             </div>
             <div className="insight-item">
               <span className="insight-icon">⚡</span>
               <p className="insight-text">
-                {overview.bestStreak > 7 
+                {overview.bestStreak > 7
                   ? `Your ${overview.bestStreak}-day streak shows you can build lasting habits!`
                   : "Consistency is key. Try not to miss twice in a row."}
               </p>
